@@ -197,7 +197,7 @@ const CreateBatch = () => {
     // Add them to uploadQueue
     setUploadqueue((prev) => [...prev, ...newQueueItems]);
 
-    // Start uploads - pass all required data
+    // Start uploads - pass all required data this will upload in cloudinary
     newQueueItems.forEach(async (queueItem) => {
       try {
         await CloudinaryUploader(
