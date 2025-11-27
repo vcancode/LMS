@@ -33,7 +33,7 @@ const Header = ({ title, userName, userImage }) => {
             <div className="w-12 h-12 rounded-full overflow-hidden">
               <img 
                 src={userImage} 
-                alt="Profile" 
+                alt="Profile image" 
                 className="w-full h-full object-cover"
               />
             </div>
