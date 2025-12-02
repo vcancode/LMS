@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Lecture from "./lectureschema.js";
 
 const BatchSchema = new mongoose.Schema({
   name: {
@@ -23,8 +24,7 @@ const BatchSchema = new mongoose.Schema({
     required:true
   },
   lectures: {
-    type: [mongoose.Schema.Types.ObjectId],
-    ref: "Lecture",
+    type: [Lecture.schema],
     default: [],
   },
   isPublic: {

@@ -36,7 +36,7 @@ const CreateBatch = async (req, res) => {
       });
 
       const savedLecture = await newLecture.save();
-      lectureIds.push(savedLecture._id);
+      lectureIds.push(savedLecture);
     }
 
     // 2. Create batch document
