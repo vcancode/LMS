@@ -33,7 +33,7 @@ const Dashboard = () => {
 
         // 👉 Route based on role
         if (user.role === "student") navigate("/studentdashboard");
-        if (user.role === "teacher") navigate("/teacherdashboard");
+        if (user.role === "teacher") navigate("/teacherdashboard/main");
 
       } catch (err) {
         console.error("Error fetching user:", err);

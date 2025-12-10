@@ -8,7 +8,8 @@ import Dashboard from './components/Dashboard'
 import StudentDashboard from './components/StudentDashboard'
 import TeacherDashboard from './components/TeacherDashboard'
 import CreateBatch from './components/CreateBatch'
-import ImagekitHandler from './components/ImagekitHandler'
+import BatchView from './components/UpdateBatch'
+import MainTeacherDashboard from './components/MainTeacherDashboard'
 function App() {
 
   const router = createBrowserRouter([
@@ -33,13 +34,23 @@ function App() {
       element: <ProtectedRoute element={<StudentDashboard/>}/> 
     },
     {
-      path:"/teacherdashboard",
-      element: <ProtectedRoute element={<TeacherDashboard/>} /> 
-    },
-    {
-      path:"/createbatch",
-      element: <ProtectedRoute element={<CreateBatch/>} /> 
-    }  
+      path: "/teacherdashboard",
+      element: <ProtectedRoute element={<MainTeacherDashboard />} />,
+      children: [
+        {
+          path:"main",
+          element:<TeacherDashboard/>
+        },
+        {
+          path: "createbatch",
+          element: <CreateBatch />
+        },
+        {
+          path: "managebatch/:batchId",
+          element: <BatchView />
+        }
+      ]
+    }
   ])
 
   return (

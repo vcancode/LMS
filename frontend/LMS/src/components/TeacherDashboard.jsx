@@ -4,6 +4,7 @@ import Axios from "axios";
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from './Header'; // Import the Header component
+import { Outlet } from 'react-router';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate()
@@ -321,12 +322,13 @@ const TeacherDashboard = () => {
                                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
-                                    <span>By {batch.instructor}</span>
+                                    <span>By {batch.PublishedBy}</span>
                                   </div>
                                 </div>
                               </div>
                               
                               <motion.button 
+                                onClick={()=>{navigate(`/teacherdashboard/managebatch/${batch._id}`)}}
                                 className="w-full bg-[#4F46E5] text-white py-3 px-6 rounded-lg hover:bg-[#38BDF8] transition-colors font-medium text-lg flex items-center justify-center"
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
@@ -412,7 +414,7 @@ const TeacherDashboard = () => {
                 Start a new batch and share your knowledge with students. Create engaging content and manage your courses effectively.
               </p>
               <motion.button 
-                onClick={()=>{navigate("/createbatch")}}
+                onClick={()=>{navigate("/teacherdashboard/createbatch")}}
                 className="w-full bg-[#4F46E5] text-white py-3 px-6 rounded-lg hover:bg-[#38BDF8] transition-colors font-medium text-lg"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}

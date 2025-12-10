@@ -1,13 +1,15 @@
-// CreateBatch.jsx
-import React, { useState } from "react";
+// UpdateBatch.jsx
+import React, { useState, useEffect } from "react";
 import Axios from "axios";
 import useUserStore from "../store/zustandstore";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "./Header";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 
-const CreateBatch = () => {
+const UpdateBatch = () => {
+  const { batchId } = useParams();
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingBatch, setLoadingBatch] = useState(true);
   const [thumbnailLoading, setThumbnailLoading] = useState(false);
   const [activeSection, setActiveSection] = useState("batch");
   const CurrentUser = useUserStore((state) => state.user);
@@ -68,8 +70,65 @@ const CreateBatch = () => {
     PublishedBy: "",
   });
 
-  // Videos array
-  const [videos, setVideos] = useState([]);
+  // New videos array (only new uploads)
+  const [newVideos, setNewVideos] = useState([]);
+
+  // Domain options
+  const domainOptions = [
+    "Web Development",
+    "Mobile Development",
+    "Data Science",
+    "Machine Learning",
+    "Artificial Intelligence",
+  ];
+
+  // Fetch batch details on component mount
+  useEffect(() => {
+    const fetchBatchDetails = async () => {
+      try {
+        setLoadingBatch(true);
+        const token = localStorage.getItem("token");
+        
+        // Fetch batch details
+        const batchRes = await fetch(
+          `${import.meta.env.VITE_BASEURL}/getbatch/${batchId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        if (!batchRes.ok) {
+          throw new Error("Failed to fetch batch details");
+        }
+        
+        const batchData = await batchRes.json();
+        
+        // Update state with fetched data
+        setBatchData({
+          name: batchData.name || "",
+          description: batchData.description || "",
+          domain: batchData.domain || "",
+          thumbnail: batchData.thumbnail || "",
+          price: batchData.price || "",
+          isPublished: batchData.isPublished || false,
+          PublishedBy: batchData.PublishedBy || "",
+        });
+        
+        setLoadingBatch(false);
+        
+      } catch (error) {
+        console.error("Error fetching batch:", error);
+        alert("Failed to load batch details");
+        navigate("/teacherdashboard/main");
+      } finally {
+        setLoadingBatch(false);
+      }
+    };
+    
+    fetchBatchDetails();
+  }, [batchId, navigate]);
 
   // Handle batch form input changes
   const handleBatchInputChange = (e) => {
@@ -104,7 +163,7 @@ const CreateBatch = () => {
     }
   };
 
-  // Cloudinary uploader function - FIXED VERSION
+  // Cloudinary uploader function for new videos
   const CloudinaryUploader = async (file, id, title, isFree = false) => {
     const formdata = new FormData();
     formdata.append("file", file);
@@ -137,7 +196,7 @@ const CreateBatch = () => {
       const url = res.data.secure_url;
       const duration = res.data.duration;
 
-      // Update upload queue first
+      // Update upload queue
       setUploadqueue((prev) =>
         prev.map((item) =>
           item.id === id
@@ -152,7 +211,7 @@ const CreateBatch = () => {
         )
       );
 
-      // Then add to videos array with the correct data
+      // Add to new videos array
       const newVideo = {
         id: crypto.randomUUID(),
         title: title,
@@ -160,10 +219,10 @@ const CreateBatch = () => {
         videoUrl: url,
         isFree: isFree,
         duration: duration,
-        order: videos.length + 1,
+        order: newVideos.length + 1,
       };
 
-      setVideos((prev) => [...prev, newVideo]);
+      setNewVideos((prev) => [...prev, newVideo]);
 
       return { url, duration };
     } catch (error) {
@@ -176,7 +235,7 @@ const CreateBatch = () => {
     }
   };
 
-  // Handle multiple video file upload - FIXED VERSION
+  // Handle multiple video file upload
   const handleVideoFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -189,15 +248,14 @@ const CreateBatch = () => {
       status: "idle",
       videoUrl: "",
       duration: 0,
-      title: file.name.replace(/\.[^/.]+$/, ""), // Use filename as title
+      title: file.name.replace(/\.[^/.]+$/, ""),
       description: "",
       isFree: false,
     }));
 
-    // Add them to uploadQueue
     setUploadqueue((prev) => [...prev, ...newQueueItems]);
 
-    // Start uploads - pass all required data this will upload in cloudinary
+    // Start uploads
     newQueueItems.forEach(async (queueItem) => {
       try {
         await CloudinaryUploader(
@@ -212,14 +270,23 @@ const CreateBatch = () => {
     });
   };
 
-  // Remove video from list
-  const removeVideo = (videoId) => {
-    setVideos((prev) => prev.filter((video) => video.id !== videoId));
+  // Handle new video title/description change
+  const handleVideoChange = (videoId, field, value) => {
+    setNewVideos((prev) =>
+      prev.map((video) =>
+        video.id === videoId ? { ...video, [field]: value } : video
+      )
+    );
   };
 
-  // Toggle free status for a video
+  // Remove new video from list
+  const removeNewVideo = (videoId) => {
+    setNewVideos((prev) => prev.filter((video) => video.id !== videoId));
+  };
+
+  // Toggle free status for a new video
   const toggleVideoFreeStatus = (videoId) => {
-    setVideos((prev) =>
+    setNewVideos((prev) =>
       prev.map((video) =>
         video.id === videoId ? { ...video, isFree: !video.isFree } : video
       )
@@ -229,58 +296,30 @@ const CreateBatch = () => {
   // Remove from upload queue (cancel upload)
   const removeFromQueue = (queueId) => {
     setUploadqueue((prev) => prev.filter((item) => item.id !== queueId));
-    
-    // Also remove any video that might have been created from this queue item
-    setVideos((prev) => prev.filter((video) => video._queueId !== queueId));
   };
 
-  // Move video up in order
-  const moveVideoUp = (index) => {
-    if (index === 0) return;
-    const newVideos = [...videos];
-    [newVideos[index], newVideos[index - 1]] = [
-      newVideos[index - 1],
-      newVideos[index],
-    ];
-    // Update order numbers
-    const updatedVideos = newVideos.map((video, idx) => ({
-      ...video,
-      order: idx + 1
+  // Prepare videos data for submission (only new videos)
+  const prepareNewVideosData = () => {
+    return newVideos.map(video => ({
+      title: video.title,
+      description: video.description,
+      videoUrl: video.videoUrl,
+      isFree: video.isFree,
+      duration: video.duration,
+      order: video.order,
     }));
-    setVideos(updatedVideos);
   };
 
-  // Move video down in order
-  const moveVideoDown = (index) => {
-    if (index === videos.length - 1) return;
-    const newVideos = [...videos];
-    [newVideos[index], newVideos[index + 1]] = [
-      newVideos[index + 1],
-      newVideos[index],
-    ];
-    // Update order numbers
-    const updatedVideos = newVideos.map((video, idx) => ({
-      ...video,
-      order: idx + 1
-    }));
-    setVideos(updatedVideos);
-  };
-
-  // Submit batch - ADD DEBUGGING
-  const handleSubmit = async (e) => {
+  // Update batch with only new videos
+  const handleUpdate = async (e) => {
     e.preventDefault();
     
-    // Debug: Check what's preventing submission
-    console.log("Batch Data:", batchData);
-    console.log("Videos:", videos);
-    console.log("Videos length:", videos.length);
-    
-    if (!batchData.name || !batchData.domain || videos.length === 0) {
-      alert("Please fill all required fields and add at least one video");
+    // Basic validation
+    if (!batchData.name || !batchData.domain) {
+      alert("Please fill all required fields");
       return;
     }
 
-    // Additional validation
     if (!batchData.description) {
       alert("Please add a batch description");
       return;
@@ -301,17 +340,27 @@ const CreateBatch = () => {
       }
 
       const finalBatchData = {
-        ...batchData,
+        // Batch metadata
+        name: batchData.name,
+        description: batchData.description,
+        domain: batchData.domain,
+        thumbnail: batchData.thumbnail,
+        price: batchData.price,
+        isPublished: batchData.isPublished,
         PublishedBy: CurrentUser.email,
-        videos: videos,
-        totalVideos: videos.length,
-        freeVideos: videos.filter((video) => video.isFree).length,
+        
+        // New videos to add
+        newVideos: prepareNewVideosData(),
+        
+        // Statistics for new videos
+        totalNewVideos: newVideos.length,
+        newFreeVideos: newVideos.filter((video) => video.isFree).length,
       };
 
-      console.log("Submitting batch data:", finalBatchData);
+      console.log("Updating batch with new videos:", finalBatchData);
 
-      const res = await fetch(`${import.meta.env.VITE_BASEURL}/createbatch`, {
-        method: "POST",
+      const res = await fetch(`${import.meta.env.VITE_BASEURL}/batchupdate/${batchId}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -322,38 +371,34 @@ const CreateBatch = () => {
       const responseData = await res.json();
       
       if (!res.ok) {
-        throw new Error(responseData.message || "Failed to create batch");
+        throw new Error(responseData.message || "Failed to update batch");
       }
 
-      alert("Batch created successfully!");
+      alert("Batch updated successfully!");
       navigate("/teacherdashboard/main");
 
-      // Reset form
-      setBatchData({
-        name: "",
-        description: "",
-        domain: "",
-        thumbnail: "",
-        price: "",
-        isPublished: false,
-      });
-      setVideos([]);
-      setUploadqueue([]);
     } catch (err) {
-      console.error("Error creating batch:", err);
-      alert(err.message || "Error creating batch. Please try again.");
+      console.error("Error updating batch:", err);
+      alert(err.message || "Error updating batch. Please try again.");
     }
     setIsLoading(false);
   };
 
-  // Domain options
-  const domainOptions = [
-    "Web Development",
-    "Mobile Development",
-    "Data Science",
-    "Machine Learning",
-    "Artificial Intelligence",
-  ];
+  // Loading state
+  if (loadingBatch) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"
+          />
+          <p className="text-lg text-gray-700">Loading batch details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -364,7 +409,7 @@ const CreateBatch = () => {
     >
       {/* Use Header Component */}
       <Header
-        title="Create New Batch"
+        title="Update Batch"
         userName={CurrentUser?.firstName || "Educator"}
         userImage={CurrentUser?.imageUrl || "/default-avatar.png"}
       />
@@ -389,7 +434,7 @@ const CreateBatch = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                 />
               </svg>
             </motion.div>
@@ -399,7 +444,7 @@ const CreateBatch = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              Create New Batch
+              Update Batch
             </motion.h1>
             <motion.p
               className="text-lg text-gray-600 max-w-2xl mx-auto"
@@ -407,9 +452,14 @@ const CreateBatch = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              Create and publish your new course batch with engaging content and
-              structured curriculum
+              Update batch details and add new videos to your course
             </motion.p>
+            <div className="mt-4 inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Batch ID: {batchId}
+            </div>
           </motion.div>
 
           {/* Progress Steps */}
@@ -472,7 +522,7 @@ const CreateBatch = () => {
             </div>
           </motion.div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleUpdate}>
             <motion.div
               className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
               variants={itemVariants}
@@ -503,7 +553,7 @@ const CreateBatch = () => {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                           />
                         </svg>
                       </motion.div>
@@ -512,7 +562,7 @@ const CreateBatch = () => {
                           Batch Information
                         </h2>
                         <p className="text-gray-600">
-                          Basic details about your course batch
+                          Update basic details about your course batch
                         </p>
                       </div>
                     </div>
@@ -640,7 +690,7 @@ const CreateBatch = () => {
                                 <p className="text-gray-600 group-hover:text-blue-600 font-medium">
                                   {thumbnailLoading
                                     ? "Uploading..."
-                                    : "Click to upload thumbnail"}
+                                    : batchData.thumbnail ? "Change thumbnail" : "Click to upload thumbnail"}
                                 </p>
                                 <p className="text-sm text-gray-500">
                                   PNG, JPG, WEBP up to 10MB
@@ -729,7 +779,7 @@ const CreateBatch = () => {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >
-                        <span>Continue to Videos</span>
+                        <span>{newVideos.length > 0 ? `Continue to Videos (${newVideos.length} added)` : "Add New Videos"}</span>
                         <svg
                           className="w-5 h-5"
                           fill="none"
@@ -748,7 +798,7 @@ const CreateBatch = () => {
                   </motion.div>
                 )}
 
-                {/* Videos Section */}
+                {/* Add Videos Section */}
                 {activeSection === "videos" && (
                   <motion.div
                     key="videos"
@@ -760,11 +810,11 @@ const CreateBatch = () => {
                   >
                     <div className="flex items-center space-x-3 mb-8">
                       <motion.div
-                        className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"
+                        className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"
                         whileHover={{ scale: 1.1 }}
                       >
                         <svg
-                          className="w-6 h-6 text-green-600"
+                          className="w-6 h-6 text-blue-600"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -779,15 +829,15 @@ const CreateBatch = () => {
                       </motion.div>
                       <div>
                         <h2 className="text-2xl font-bold text-gray-900">
-                          Add Videos
+                          Add New Videos
                         </h2>
                         <p className="text-gray-600">
-                          Upload multiple videos and manage your course curriculum
+                          Upload new videos to add to your existing batch
                         </p>
                       </div>
                     </div>
 
-                    {/* Multiple Video Upload Section */}
+                    {/* New Video Upload Section */}
                     <motion.div
                       className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl border border-blue-100 mb-8"
                       initial={{ opacity: 0, y: 20 }}
@@ -808,13 +858,13 @@ const CreateBatch = () => {
                             d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                           />
                         </svg>
-                        <span>Upload Multiple Videos</span>
+                        <span>Upload New Videos</span>
                       </h3>
 
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-800 mb-3">
-                            Video Files <span className="text-red-500">*</span>
+                            Select Video Files
                           </label>
                           <motion.input
                             type="file"
@@ -825,7 +875,7 @@ const CreateBatch = () => {
                             whileHover={{ scale: 1.02 }}
                           />
                           <p className="text-sm text-gray-600 mt-2">
-                            You can select multiple videos to upload at once. Each video will show its upload progress.
+                            Select multiple videos to add to your existing batch content.
                           </p>
                         </div>
                       </div>
@@ -952,8 +1002,8 @@ const CreateBatch = () => {
                       </motion.div>
                     )}
 
-                    {/* Uploaded Videos List */}
-                    {videos.length > 0 && (
+                    {/* New Videos List */}
+                    {newVideos.length > 0 && (
                       <motion.div
                         className="space-y-6"
                         initial={{ opacity: 0 }}
@@ -975,23 +1025,20 @@ const CreateBatch = () => {
                                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                               />
                             </svg>
-                            <span>Course Videos ({videos.length})</span>
+                            <span>New Videos to Add ({newVideos.length})</span>
                           </h3>
                           <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
-                              {videos.filter((v) => v.isFree).length} Free
-                            </span>
-                            <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full">
-                              Total: {videos.length}
+                              {newVideos.filter(v => v.isFree).length} Free Preview
                             </span>
                           </div>
                         </div>
 
                         <div className="space-y-4">
-                          {videos.map((video, index) => (
+                          {newVideos.map((video, index) => (
                             <motion.div
                               key={video.id}
-                              className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition-all group"
+                              className="bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-md transition-all group"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.1 }}
@@ -1004,9 +1051,15 @@ const CreateBatch = () => {
                                       <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">
                                         {index + 1}
                                       </span>
-                                      <h4 className="font-bold text-gray-900 text-lg">
-                                        {video.title}
-                                      </h4>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={video.title}
+                                          onChange={(e) => handleVideoChange(video.id, 'title', e.target.value)}
+                                          className="font-bold text-gray-900 text-lg bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
+                                          placeholder="Enter video title"
+                                        />
+                                      </div>
                                     </div>
                                     <label className="flex items-center space-x-2 cursor-pointer">
                                       <input
@@ -1026,11 +1079,15 @@ const CreateBatch = () => {
                                     )}
                                   </div>
 
-                                  {video.description && (
-                                    <p className="text-gray-600 mb-3 leading-relaxed">
-                                      {video.description}
-                                    </p>
-                                  )}
+                                  <div className="mb-4">
+                                    <textarea
+                                      value={video.description}
+                                      onChange={(e) => handleVideoChange(video.id, 'description', e.target.value)}
+                                      rows="2"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+                                      placeholder="Add video description (optional)..."
+                                    />
+                                  </div>
 
                                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                                     <span className="flex items-center space-x-1">
@@ -1063,61 +1120,15 @@ const CreateBatch = () => {
                                           d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
                                         />
                                       </svg>
-                                      <span>Uploaded</span>
+                                      <span>Ready to add</span>
                                     </span>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="ml-4">
                                   <motion.button
                                     type="button"
-                                    onClick={() => moveVideoUp(index)}
-                                    disabled={index === 0}
-                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                    title="Move up"
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                  >
-                                    <svg
-                                      className="w-5 h-5"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 15l7-7 7 7"
-                                      />
-                                    </svg>
-                                  </motion.button>
-                                  <motion.button
-                                    type="button"
-                                    onClick={() => moveVideoDown(index)}
-                                    disabled={index === videos.length - 1}
-                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                    title="Move down"
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                  >
-                                    <svg
-                                      className="w-5 h-5"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M19 9l-7 7-7-7"
-                                        />
-                                    </svg>
-                                  </motion.button>
-                                  <motion.button
-                                    type="button"
-                                    onClick={() => removeVideo(video.id)}
+                                    onClick={() => removeNewVideo(video.id)}
                                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                     title="Remove video"
                                     whileHover={{ scale: 1.1 }}
@@ -1169,69 +1180,79 @@ const CreateBatch = () => {
                         <span>Back to Batch Details</span>
                       </motion.button>
 
-                      <motion.button
-                        type="submit"
-                        disabled={
-                          isLoading ||
-                          !batchData.name ||
-                          !batchData.description ||
-                          !batchData.domain ||
-                          !batchData.thumbnail ||
-                          videos.length === 0
-                        }
-                        className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-12 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none font-bold shadow-xl flex items-center space-x-3"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        {isLoading ? (
-                          <>
-                            <motion.svg
-                              className="h-5 w-5 text-white"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 1,
-                                repeat: Infinity,
-                                ease: "linear",
-                              }}
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
+                      <div className="flex items-center space-x-4">
+                        <motion.button
+                          type="button"
+                          onClick={() => navigate("/teacherdashboard/main")}
+                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Cancel
+                        </motion.button>
+                        <motion.button
+                          type="submit"
+                          disabled={
+                            isLoading ||
+                            !batchData.name ||
+                            !batchData.description ||
+                            !batchData.domain ||
+                            !batchData.thumbnail
+                          }
+                          className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none font-bold shadow-lg flex items-center space-x-2"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {isLoading ? (
+                            <>
+                              <motion.svg
+                                className="h-5 w-5 text-white"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                animate={{ rotate: 360 }}
+                                transition={{
+                                  duration: 1,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                }}
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </motion.svg>
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
                                 stroke="currentColor"
-                                strokeWidth="4"
-                              ></circle>
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              ></path>
-                            </motion.svg>
-                            <span>Creating Batch...</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                            <span>Create Batch</span>
-                          </>
-                        )}
-                      </motion.button>
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                              <span>{newVideos.length > 0 ? `Update Batch (Add ${newVideos.length} Videos)` : "Update Batch"}</span>
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1244,4 +1265,4 @@ const CreateBatch = () => {
   );
 };
 
-export default CreateBatch;
+export default UpdateBatch;
